@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "ru.bstu.equipmentdiag-debug-41:/layout_activity_main.xml.flat",
+        "source": "ru.bstu.equipmentdiag-main-43:/layout/activity_main.xml"
+    },
+    {
+        "merged": "ru.bstu.equipmentdiag-debug-41:/layout_activity_diagnostic_detail.xml.flat",
+        "source": "ru.bstu.equipmentdiag-main-43:/layout/activity_diagnostic_detail.xml"
+    },
+    {
+        "merged": "ru.bstu.equipmentdiag-debug-41:/layout_activity_barcode_scanner.xml.flat",
+        "source": "ru.bstu.equipmentdiag-main-43:/layout/activity_barcode_scanner.xml"
+    }
+]

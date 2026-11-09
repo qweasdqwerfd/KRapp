@@ -1,0 +1,17 @@
+R_DEF: Internal format may change without notice
+local
+id btnScanBarcode
+id progressBar
+id tvAction
+id tvBarcode
+id tvCategory
+id tvConclusion
+id tvDefectsList
+id tvModelName
+id tvOrderNotice
+id viewFinder
+layout activity_barcode_scanner
+layout activity_diagnostic_detail
+layout activity_main
+string app_name
+style Theme.EquipmentDiag
