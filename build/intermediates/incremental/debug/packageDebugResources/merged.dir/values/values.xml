@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Диагностика БГТУ</string>
+    <style name="Theme.EquipmentDiag" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#0D6EFD</item>
+        <item name="colorPrimaryVariant">#0B5ED7</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+    </style>
+</resources>
