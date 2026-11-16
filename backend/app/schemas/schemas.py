@@ -103,7 +103,9 @@ class DepartmentLoadReportItem(BaseModel):
 # 5. Live Web Scraping & Ingestion
 class ScrapeUrlRequest(BaseModel):
     url: str = Field(..., description="Ссылка на товар или страницу каталога (Tehnoformula, Spectrasoft или любой сайт)")
-    max_items: int = Field(default=15, ge=1, le=100, description="Максимальное количество товаров для парсинга")
+    max_items: int = Field(default=15, ge=1, le=1000, description="Максимальное количество товаров для парсинга")
+    max_pages: int = Field(default=50, ge=1, le=500, description="Максимальное число страниц пагинации каталога")
+    follow_details: bool = Field(default=True, description="Заходить в карточку каждого товара (полные ТТХ и штрихкод)")
     department_id: Optional[int] = Field(default=None, description="ID сервисного отдела (если None, берётся дефолтный)")
 
 class ScrapedItemProtocol(BaseModel):

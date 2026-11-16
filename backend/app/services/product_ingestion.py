@@ -88,7 +88,7 @@ async def ingest_scraped_products(
                 cat_code = prod.category.upper()
                 cat = cat_map.get(cat_code)
                 if not cat:
-                    readable_name = cat_code.replace("_", " ").title()
+                    readable_name = (getattr(prod, "category_name", None) or cat_code.replace("_", " ").title())[:100]
                     cat = EquipmentCategory(
                         name=readable_name,
                         code=cat_code,
@@ -105,8 +105,14 @@ async def ingest_scraped_products(
                 m_res = await db.execute(model_stmt)
                 model = m_res.scalars().first()
 
+                specs_payload = dict(prod.specs or {})
+                if prod.source_url:
+                    specs_payload["source_url"] = prod.source_url
+                specs_payload["barcode_ean13"] = prod.barcode
+                specs_json = json.dumps(specs_payload, ensure_ascii=False, default=str)
+
                 if not model:
-                    release_year = max(2000, min(2030, prod.release_year))
+                    release_year = max(2000, min(2030, prod.release_year or date.today().year))
                     warranty = max(0, prod.warranty_months)
                     model = EquipmentModel(
                         category_id=cat.id,
@@ -120,22 +126,21 @@ async def ingest_scraped_products(
                     db.add(model)
                     await db.flush()
 
-                    # 4. Технические характеристики (TechnicalSpecification 1:1)
-                    specs_payload = prod.specs or {}
-                    if prod.source_url:
-                        specs_payload["source_url"] = prod.source_url
-
-                    spec = TechnicalSpecification(
-                        model_id=model.id,
-                        power_consumption_watts=prod.power_watts,
-                        operating_voltage_volts=prod.voltage,
-                        dimensions_mm=prod.dimensions_mm,
-                        weight_kg=prod.weight_kg,
-                        color=prod.color,
-                        additional_specs=json.dumps(specs_payload, ensure_ascii=False)
-                    )
+                # 4. Технические характеристики (TechnicalSpecification 1:1) — создаём или обновляем
+                spec_res = await db.execute(
+                    select(TechnicalSpecification).where(TechnicalSpecification.model_id == model.id)
+                )
+                spec = spec_res.scalars().first()
+                if not spec:
+                    spec = TechnicalSpecification(model_id=model.id)
                     db.add(spec)
-                    await db.flush()
+                spec.power_consumption_watts = prod.power_watts or spec.power_consumption_watts
+                spec.operating_voltage_volts = prod.voltage or spec.operating_voltage_volts
+                spec.dimensions_mm = prod.dimensions_mm or spec.dimensions_mm
+                spec.weight_kg = prod.weight_kg or spec.weight_kg
+                spec.color = prod.color or spec.color
+                spec.additional_specs = specs_json
+                await db.flush()
 
                 # 5. Экземпляр оборудования (EquipmentItem со штрихкодом EAN-13)
                 barcode_stmt = select(EquipmentItem).where(EquipmentItem.barcode == prod.barcode)
@@ -143,6 +148,8 @@ async def ingest_scraped_products(
                 existing_item = b_res.scalars().first()
 
                 if existing_item:
+                    if prod.price:
+                        existing_item.initial_cost = prod.price
                     protocol["already_exists_count"] += 1
                     protocol["items"].append({
                         "barcode": prod.barcode,
@@ -193,6 +200,7 @@ async def ingest_scraped_products(
                     "manufacturer": mfg.name,
                     "category": cat.code,
                     "price": new_item.initial_cost,
+                    "barcode_source": getattr(prod, "barcode_source", None),
                     "status": "IMPORTED"
                 })
 

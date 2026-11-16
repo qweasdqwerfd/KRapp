@@ -85,6 +85,34 @@ bash scripts/test_backup_restore.sh
 
 ### 3.7 Веб-парсинг внешних каталогов в БД (EAN-13)
 ```bash
-python scripts/scrape_to_db.py --url "https://tehnoformula.ru/product/usb/?PAGEN_1=2&view_mode=list" --limit 10
+# Вся категория (обход пагинации + заход в карточку каждого товара)
+python scripts/scrape_to_db.py --url "https://tehnoformula.ru/product/televizory/" --limit 1000
+
+# Предпросмотр без записи в БД, с выводом всех характеристик
+python scripts/scrape_to_db.py --url "https://tehnoformula.ru/product/televizory/" --limit 5 --dry-run --show-specs
+
+# Одна карточка товара с любого сайта
+python scripts/scrape_to_db.py --url "https://spectrasoft.ru/items/....html"
 ```
+
+Опции: `--max-pages N` — лимит страниц каталога, `--no-details` — не заходить в карточки (быстро, без ТТХ),
+`--delay 0.3` — пауза между запросами, `--no-proxy` — игнорировать `HTTP(S)_PROXY` из окружения.
+
+Как работает парсер (`app/services/web_scraper.py`):
+1. **Каталог или карточка.** Если на странице один товар (JSON-LD/microdata `Product`, `og:type=product`,
+   таблица характеристик с артикулом/штрихкодом), разбирается карточка. Иначе собираются ссылки на товары
+   (JSON-LD `ItemList` → Bitrix `data-entity="item"` → microdata → эвристика «ссылка рядом с ценой»)
+   и обходится пагинация (`rel=next`, `.pagination .next`, `?PAGEN_1=`, `?page=`, `/page/N`).
+2. **Карточка.** Данные объединяются из JSON-LD, microdata, таблиц `tr`/`dl`/`li` характеристик, хлебных
+   крошек и meta-тегов: название, артикул, партномер, бренд, цена/валюта, наличие, категория, описание,
+   изображения, гарантия, вес, габариты, цвет, мощность и все прочие ТТХ.
+3. **EAN-13.** Берётся штрихкод с сайта (поля «Штрихкод», EAN, GTIN, `gtin13`) с проверкой контрольной суммы;
+   UPC-A (12 цифр) и GTIN-14 приводятся к EAN-13. Если на сайте штрихкода нет или он невалиден, генерируется
+   внутренний код GS1 с префиксом `200`; в ТТХ записывается `_barcode_source: site | generated`.
+4. **БД.** `manufacturers` → `equipment_categories` (по хлебным крошкам, напр. `TELEVIZORY / Телевизоры`) →
+   `equipment_models` (артикул) → `technical_specifications` (все ТТХ в `additional_specs` JSON) →
+   `equipment_items` (уникальный `barcode` EAN-13, цена). Повторный запуск обновляет цену и ТТХ.
+
+API: `POST /api/parser/scrape-url` (`url`, `max_items`, `max_pages`, `follow_details`) и
+`GET /api/parser/preview-url` — предпросмотр без записи.
 

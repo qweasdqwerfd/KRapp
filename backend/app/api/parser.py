@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, date
@@ -14,6 +15,12 @@ from app.models.entities import (
 )
 from app.schemas.schemas import ScrapeUrlRequest, ScrapeUrlResponse
 from app.services.web_scraper import UniversalProductScraper, validate_ean13
+
+
+def _run_scraper(url: str, max_items: int, max_pages: int = 50, follow_details: bool = True):
+    """Синхронный парсинг (HTTP-запросы) — выполняется в пуле потоков, чтобы не блокировать event loop."""
+    with UniversalProductScraper() as scraper:
+        return scraper.scrape(url, max_items=max_items, max_pages=max_pages, follow_details=follow_details)
 from app.services.product_ingestion import ingest_scraped_products
 
 router = APIRouter(prefix="/parser", tags=["Импорт данных из внешних источников / DNS (Задание 4)"])
@@ -177,9 +184,10 @@ async def scrape_and_ingest_url(
     - Проверяет валидность EAN-13 контрольной суммы
     - Сохраняет данные в базу PostgreSQL с соблюдением 3НФ (производители, категории, модели, ТТХ, экземпляры)
     """
-    scraper = UniversalProductScraper()
     try:
-        products = scraper.scrape(req.url, max_items=req.max_items)
+        products = await run_in_threadpool(
+            _run_scraper, req.url, req.max_items, req.max_pages, req.follow_details
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -206,14 +214,15 @@ async def scrape_and_ingest_url(
 async def preview_scrape_url(
     url: str,
     max_items: int = 10,
+    max_pages: int = 5,
+    follow_details: bool = True,
     current_user: User = Depends(require_roles(["ADMIN", "TECHNICIAN"]))
 ):
     """
     Быстрый предпросмотр: парсит URL и возвращает извлеченные сущности с валидацией EAN-13 без коммита в БД.
     """
-    scraper = UniversalProductScraper()
     try:
-        products = scraper.scrape(url, max_items=max_items)
+        products = await run_in_threadpool(_run_scraper, url, max_items, max_pages, follow_details)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -229,14 +238,19 @@ async def preview_scrape_url(
                 "vendor_code": p.vendor_code,
                 "barcode": p.barcode,
                 "is_ean13_valid": validate_ean13(p.barcode),
+                "barcode_source": p.barcode_source,
+                "source_url": p.source_url,
                 "price": p.price,
                 "manufacturer": p.manufacturer,
                 "category": p.category,
+                "category_name": p.category_name,
                 "warranty_months": p.warranty_months,
                 "release_year": p.release_year,
                 "dimensions_mm": p.dimensions_mm,
                 "weight_kg": p.weight_kg,
                 "color": p.color,
+                "power_watts": p.power_watts,
+                "voltage": p.voltage,
                 "specs": p.specs
             }
             for p in products
