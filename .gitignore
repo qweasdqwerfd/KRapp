@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment & Backups
+.env
+*.sql.gz
+*.sql
+
+# Android
+.gradle/
+build/
+*.apk
+*.aab
+local.properties
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+

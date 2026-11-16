@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bstu_equipment_db
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: equipment_diag_db
+      POSTGRES_USER: diag_admin
+      POSTGRES_PASSWORD: secure_diag_pass_2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init_roles.sql:/docker-entrypoint-initdb.d/01_roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diag_admin -d equipment_diag_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bstu_equipment_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://diag_admin:secure_diag_pass_2026@db:5432/equipment_diag_db
+      SYNC_DATABASE_URL: postgresql+psycopg2://diag_admin:secure_diag_pass_2026@db:5432/equipment_diag_db
+      JWT_SECRET_KEY: supersecretjwtkey_for_bstu_2026
+      ENVIRONMENT: production
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backup_service:
+    image: postgres:16-alpine
+    container_name: bstu_equipment_backup
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: diag_admin
+      PGPASSWORD: secure_diag_pass_2026
+      PGDATABASE: equipment_diag_db
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: "7"
+    volumes:
+      - backups_data:/backups
+      - ./backend/scripts/backup_runner.sh:/usr/local/bin/backup_runner.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/backup_runner.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  backups_data:
+
